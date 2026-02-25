@@ -1,22 +1,25 @@
 import { useRef, useState, useEffect } from "react";
 import { useNotifications } from "../../context/NotificationContext";
+import { Newspaper, Calendar, CreditCard, Wallet, Users, Info, Megaphone, BarChart3, Settings } from "lucide-react";
+
 
 const tabs = [
-    { id: "feed", label: "Feed", icon: "📰" },
-    { id: "meetings", label: "Meetings", icon: "📅" },
-    { id: "payments", label: "Payments", icon: "💳" },
-    { id: "disbursements", label: "Disbursements", icon: "💰" },
-    { id: "members", label: "Members", icon: "👥" },
-    { id: "about", label: "About", icon: "ℹ️" },
-    { id: "announcements", label: "Announcements", icon: "📢" },
-    { id: "polls", label: "Polls", icon: "🗳️" },
-    { id: "settings", label: "Settings", icon: "⚙️" },
+    { id: "feed", label: "Feed", icon: Newspaper },
+    { id: "meetings", label: "Meetings", icon: Calendar },
+    { id: "payments", label: "Payments", icon: CreditCard },
+    { id: "disbursements", label: "Disbursements", icon: Wallet },
+    { id: "members", label: "Members", icon: Users },
+    { id: "about", label: "About", icon: Info },
+    { id: "announcements", label: "Announcements", icon: Megaphone },
+    { id: "polls", label: "Polls", icon: BarChart3 },
+    { id: "settings", label: "Settings", icon: Settings },
 ];
 
 export default function ForumTabNav({ activeTab, onTabChange, forumId }) {
     const navRef = useRef(null);
     const [showOverflowHint, setShowOverflowHint] = useState(false);
-    const { getTabUnreadCount } = useNotifications();
+    const { getTabUnreadCount, lastFetchedAt } = useNotifications();
+    const isDev = import.meta.env.DEV;
 
     useEffect(() => {
         const el = navRef.current;
@@ -40,24 +43,41 @@ export default function ForumTabNav({ activeTab, onTabChange, forumId }) {
                     {tabs.map((tab) => {
                         const unreadCount = forumId ? getTabUnreadCount(forumId, tab.id) : 0;
                         console.debug(`[ForumTabNav] Tab ${tab.id}: unreadCount=${unreadCount}, forumId=${forumId}`);
+                        // Determine if counts appear stale (debug only)
+                        const lastFetchedMs = lastFetchedAt ? new Date(lastFetchedAt).getTime() : 0;
+                        const ageMs = Date.now() - lastFetchedMs;
+                        const countsStale = isDev ? (lastFetchedAt === null || ageMs > 15000) : false; // 15s threshold
+                        const Icon = tab.icon;
+
                         return (
                             <button
                                 key={tab.id}
                                 onClick={() => onTabChange(tab.id)}
-                                className={`px-3 py-2 whitespace-nowrap text-sm md:text-base font-medium transition border-b-2 relative ${activeTab === tab.id
+                                className={`min-w-[56px] md:min-w-[96px] h-8 md:h-10 px-2 md:px-3 py-1.5 md:py-2 whitespace-nowrap text-sm md:text-base font-medium flex items-center justify-center transition border-b-2 relative ${activeTab === tab.id
                                     ? "border-primary text-primary"
                                     : "border-transparent text-gray-600 hover:text-primary"
                                     }`}
                             >
-                                <span className="md:hidden">{tab.icon}</span>
-                                <span className="hidden md:inline">{tab.icon} {tab.label}</span>
+                                <span className="flex items-center gap-1">
+                                    <Icon className="h-5 w-5" aria-hidden="true" />
+                                    <span className="hidden md:inline align-middle">{tab.label}</span>
+                                </span>
 
-                                {/* Notification badge for all tabs */}
+                                {/* Notification badge for all tabs (smaller, positioned closer to label/icon) */}
                                 {unreadCount > 0 && (
-                                    <span className="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-                                        {unreadCount}
+                                    <span
+                                        role="status"
+                                        aria-live="polite"
+                                        aria-atomic="true"
+                                        className="absolute inline-flex items-center justify-center bg-red-600 text-white rounded-full shadow-sm h-4 w-4 text-[10px] font-semibold md:h-5 md:w-5 md:text-[11px]"
+                                        style={{ top: 4, right: 6, transform: 'translate(30%, -30%)' }}
+                                    >
+                                        <span aria-hidden>{unreadCount > 99 ? '99+' : unreadCount}</span>
+                                        <span className="sr-only">{unreadCount} unread notifications</span>
                                     </span>
                                 )}
+
+                                {/* countsStale debug indicator removed for production UI */}
                             </button>
                         );
                     })}

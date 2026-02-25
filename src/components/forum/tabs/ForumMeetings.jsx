@@ -6,7 +6,6 @@ import CreateMeetingModal from "../modals/CreateMeetingModal";
 import MeetingDetailView from "../views/MeetingDetailView";
 
 export default function ForumMeetings({ forum, userRole, userEmail }) {
-    const { clearTabNotifications } = useNotifications();
     const [meetings, setMeetings] = useState([]);
     const [showCreateModal, setShowCreateModal] = useState(false);
     const [selectedMeeting, setSelectedMeeting] = useState(null);
@@ -16,11 +15,7 @@ export default function ForumMeetings({ forum, userRole, userEmail }) {
 
     useEffect(() => {
         fetchMeetings();
-        // Clear meeting notifications when entering this tab
-        if (forum?.id) {
-            clearTabNotifications(forum.id, "meetings");
-        }
-    }, [forum?.id, clearTabNotifications]);
+    }, [forum?.id]);
 
     const fetchMeetings = async () => {
         try {

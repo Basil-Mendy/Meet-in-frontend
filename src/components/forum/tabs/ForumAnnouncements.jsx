@@ -6,14 +6,14 @@ import NotificationMessageBar from "../../notifications/NotificationMessageBar";
 function CreateAnnouncementModal({ forumId, isAdmin, onSuccess, onClose }) {
     const [title, setTitle] = useState("");
     const [message, setMessage] = useState("");
-    const [type, setType] = useState("FORUM");
+    const [type, setType] = useState("GENERAL");
     const [selectedRecipients, setSelectedRecipients] = useState([]);
     const [allMembers, setAllMembers] = useState([]);
     const [loading, setLoading] = useState(false);
     const [showRecipients, setShowRecipients] = useState(false);
 
     useEffect(() => {
-        if (type === "EMAIL" && allMembers.length === 0) {
+        if (type === "TARGETED" && allMembers.length === 0) {
             fetchMembers();
         }
     }, [type]);
@@ -27,26 +27,45 @@ function CreateAnnouncementModal({ forumId, isAdmin, onSuccess, onClose }) {
         }
     };
 
+    const [attachments, setAttachments] = useState([]);
+
+    const handleFileChange = (e) => {
+        setAttachments(Array.from(e.target.files || []));
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         if (!title.trim() || !message.trim()) {
             return alert("Title and message are required");
         }
-
         try {
             setLoading(true);
-            const payload = {
-                title,
-                message,
-                announcement_type: type,
-                save_to_forum_feed: type === "EMAIL" ? true : true,
-            };
 
-            if (type === "EMAIL" && selectedRecipients.length > 0) {
-                payload.recipient_ids = selectedRecipients;
+            const formData = new FormData();
+            formData.append('title', title);
+            formData.append('message', message);
+            formData.append('announcement_type', type === 'GENERAL' ? 'GENERAL' : 'TARGETED');
+
+            if (type === 'TARGETED') {
+                if (selectedRecipients.length > 0) {
+                    selectedRecipients.forEach(id => formData.append('recipient_ids', id));
+                }
+                // support all_members flag
+                // if selectedRecipients empty and admin wants all, set all_members
+                if (selectedRecipients.length === 0) {
+                    formData.append('all_members', 'true');
+                }
             }
 
-            const res = await api.post(`forums/${forumId}/announcements/`, payload);
+            // Attach files
+            attachments.forEach(file => {
+                formData.append('attachments', file);
+            });
+
+            const res = await api.post(`forums/${forumId}/announcements/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+
             if ([200, 201].includes(res.status)) {
                 onSuccess();
                 onClose();
@@ -108,17 +127,17 @@ function CreateAnnouncementModal({ forumId, isAdmin, onSuccess, onClose }) {
                             onChange={(e) => setType(e.target.value)}
                             className="w-full px-3 py-2 border rounded-lg"
                         >
-                            <option value="FORUM">Forum Announcement (Pinned)</option>
-                            <option value="EMAIL">Email Announcement</option>
+                            <option value="GENERAL">General (visible to all members)</option>
+                            <option value="TARGETED">Targeted (selected recipients only)</option>
                         </select>
                         <p className="text-xs text-gray-500 mt-1">
-                            {type === "FORUM"
+                            {type === "GENERAL"
                                 ? "Visible to all members in the Announcements tab"
-                                : "Sent via email to selected members"}
+                                : "Visible only to selected members (creates in-app + push notifications)"}
                         </p>
                     </div>
 
-                    {type === "EMAIL" && (
+                    {type === "TARGETED" && (
                         <div>
                             <div className="flex items-center justify-between mb-2">
                                 <label className="block text-sm font-semibold">Recipients</label>
@@ -171,14 +190,18 @@ function CreateAnnouncementModal({ forumId, isAdmin, onSuccess, onClose }) {
                                     {allMembers.length === 0 && (
                                         <p className="text-sm text-gray-500">No members found</p>
                                     )}
+                                    <p className="text-xs text-gray-500 mt-2">Leave empty to send to all members</p>
                                 </div>
                             )}
-
-                            <p className="text-xs text-gray-500 mt-2">
-                                Leave empty to send to all members
-                            </p>
                         </div>
                     )}
+
+                    {/* Attachments (multiple) */}
+                    <div>
+                        <label className="block text-sm font-semibold mb-1">Attachments</label>
+                        <input type="file" multiple onChange={handleFileChange} className="w-full" />
+                        <p className="text-xs text-gray-500 mt-1">Supported: PDF, images, documents. Max total size depends on server config.</p>
+                    </div>
 
                     <div className="flex gap-2 justify-end">
                         <button
@@ -204,6 +227,58 @@ function CreateAnnouncementModal({ forumId, isAdmin, onSuccess, onClose }) {
 
 function AnnouncementCard({ announcement, forumId, isAdmin, onMarkRead, onArchive }) {
     const [sending, setSending] = useState(false);
+    const [previewUrl, setPreviewUrl] = useState(null);
+    const [previewName, setPreviewName] = useState(null);
+
+    const closePreview = () => {
+        try {
+            if (previewUrl) window.URL.revokeObjectURL(previewUrl);
+        } catch (e) { }
+        setPreviewUrl(null);
+        setPreviewName(null);
+    };
+
+    const viewAttachment = async (attachment) => {
+        try {
+            const res = await api.get(`forums/${forumId}/announcements/attachments/${attachment.id}/`, { responseType: 'blob' });
+            const blob = new Blob([res.data], { type: res.data.type || res.headers['content-type'] });
+            const isImage = blob.type && blob.type.startsWith('image/');
+            const url = window.URL.createObjectURL(blob);
+            if (isImage) {
+                setPreviewUrl(url);
+                setPreviewName(attachment.filename);
+            } else {
+                const win = window.open(url, '_blank');
+                if (!win) {
+                    const link = document.createElement('a');
+                    link.href = url;
+                    link.download = attachment.filename;
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                }
+            }
+        } catch (err) {
+            console.error('Failed to open attachment', err);
+            alert('Failed to open attachment');
+        }
+    };
+
+    const downloadAttachment = async (attachment) => {
+        try {
+            const res = await api.get(`forums/${forumId}/announcements/attachments/${attachment.id}/?download=true`, { responseType: 'blob' });
+            const url = window.URL.createObjectURL(new Blob([res.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = attachment.filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (err) {
+            console.error('Failed to download attachment', err);
+            alert('Failed to download attachment');
+        }
+    };
 
     const handleMarkRead = async () => {
         try {
@@ -229,21 +304,27 @@ function AnnouncementCard({ announcement, forumId, isAdmin, onMarkRead, onArchiv
         }
     };
 
-    const badgeColor = announcement.announcement_type === "EMAIL" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800";
+    const badgeColor = announcement.announcement_type === "TARGETED" ? "bg-purple-100 text-purple-800" : "bg-blue-100 text-blue-800";
     const statusBadge = announcement.is_archived ? "bg-gray-100 text-gray-800" : "bg-green-100 text-green-800";
 
     return (
         <div className="bg-white border rounded-lg p-4 hover:shadow-md transition">
             <div className="flex items-start justify-between mb-3">
                 <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                        <h3 className="text-lg font-bold">{announcement.title}</h3>
-                        <span className={`text-xs px-2 py-1 rounded ${badgeColor}`}>
-                            {announcement.announcement_type === "EMAIL" ? "Email" : "Forum"}
-                        </span>
-                        <span className={`text-xs px-2 py-1 rounded ${statusBadge}`}>
-                            {announcement.is_archived ? "Archived" : "Active"}
-                        </span>
+                    <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <h3 className="text-lg font-bold truncate">{announcement.title}</h3>
+                            <span className={`text-xs px-2 py-1 rounded-full ${badgeColor}`}>{announcement.announcement_type === "TARGETED" ? "Targeted" : "General"}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${statusBadge}`}>{announcement.is_archived ? "Archived" : "Active"}</span>
+                        </div>
+
+                        {announcement.recipients && (
+                            <div className="ml-2">
+                                <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-800">
+                                    {announcement.recipients.all_members ? 'All Members' : announcement.recipients.count ? `${announcement.recipients.count} recipients` : 'Selected'}
+                                </span>
+                            </div>
+                        )}
                     </div>
                     <p className="text-sm text-gray-600">
                         Posted by <span className="font-semibold">{announcement.created_by_name}</span> on{" "}
@@ -254,17 +335,28 @@ function AnnouncementCard({ announcement, forumId, isAdmin, onMarkRead, onArchiv
 
             <p className="text-sm mb-4 text-gray-700 whitespace-pre-wrap">{announcement.message}</p>
 
-            <div className="flex items-center justify-between text-xs text-gray-500">
-                <div className="flex gap-4">
-                    <span>{announcement.read_count} people read this</span>
+            <div className="flex items-center justify-between text-sm text-gray-500 flex-wrap gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                    <span className="text-xs text-gray-600">{announcement.read_count} people read this</span>
+
+                    {announcement.attachments && announcement.attachments.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            {announcement.attachments.map(att => (
+                                <div key={att.id} className="inline-flex items-center gap-2 bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs max-w-[160px] truncate">
+                                    <span className="text-sm">📎</span>
+                                    <button onClick={() => viewAttachment(att)} className="truncate text-xs text-blue-600 hover:underline max-w-[120px]">{att.filename}</button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                     {!announcement.is_read && (
                         <button
                             onClick={handleMarkRead}
                             disabled={sending}
-                            className="text-blue-600 hover:underline text-xs"
+                            className="text-sm px-3 py-1 rounded hover:bg-gray-100 text-blue-600"
                         >
                             {sending ? "..." : "Mark as Read"}
                         </button>
@@ -273,13 +365,26 @@ function AnnouncementCard({ announcement, forumId, isAdmin, onMarkRead, onArchiv
                         <button
                             onClick={handleArchive}
                             disabled={sending}
-                            className="text-gray-600 hover:underline text-xs"
+                            className="text-sm px-3 py-1 rounded hover:bg-gray-100 text-gray-700"
                         >
                             {sending ? "..." : announcement.is_archived ? "Unarchive" : "Archive"}
                         </button>
                     )}
                 </div>
             </div>
+            {previewUrl && (
+                <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
+                    <div className="bg-white rounded p-4 max-w-4xl w-full mx-4 max-h-[90vh] overflow-auto">
+                        <div className="flex justify-end mb-2">
+                            <button onClick={closePreview} className="text-sm px-2 py-1 bg-gray-200 rounded">Close</button>
+                        </div>
+                        <div className="flex items-center justify-center">
+                            <img src={previewUrl} alt={previewName} className="max-h-[80vh] w-auto mx-auto" />
+                        </div>
+                        <p className="text-center text-xs text-gray-500 mt-2">{previewName}</p>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
@@ -292,14 +397,12 @@ export default function ForumAnnouncements({ forum, userRole }) {
 
     const isAdmin = userRole && ["SA", "CP", "VC", "SEC", "FSEC"].includes(userRole.toUpperCase());
     const forumId = forum?.id;
-    const { clearTabNotifications } = useNotifications();
 
     useEffect(() => {
         if (forumId) {
             fetchAnnouncements();
-            clearTabNotifications(forumId, "announcements");
         }
-    }, [forumId, showArchived, clearTabNotifications]);
+    }, [forumId, showArchived]);
 
     const fetchAnnouncements = async () => {
         try {

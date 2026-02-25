@@ -11,6 +11,7 @@ import JoinForum from "./pages/JoinForum";
 import UserProfile from "./pages/UserProfile";
 import UserWallet from "./pages/UserWallet";
 import ForumDetail from "./pages/ForumDetail";
+import NotificationsCenter from "./pages/NotificationsCenter";
 
 function AppRoutes() {
   const { isAuthenticated, loading } = useContext(AuthContext);
@@ -56,6 +57,10 @@ function AppRoutes() {
         <Route
           path="/user-profile"
           element={isAuthenticated ? <UserProfile /> : <Navigate to="/login" />}
+        />
+        <Route
+          path="/notifications"
+          element={isAuthenticated ? <NotificationsCenter /> : <Navigate to="/login" />}
         />
         <Route
           path="/user-wallet"

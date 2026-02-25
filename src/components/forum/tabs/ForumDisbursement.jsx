@@ -28,37 +28,18 @@ export default function ForumDisbursement({ forum, userRole }) {
     const [detailsLoading, setDetailsLoading] = useState(false);
 
     const isAdmin = userRole && ["SA", "CP", "VC", "SEC", "FSEC"].includes(userRole);
-    const { clearTabNotifications, notifications } = useNotifications();
+    const { notifications } = useNotifications();
 
     useEffect(() => {
         if (forum?.id) {
             fetchMyDisbursements();
-            clearTabNotifications(forum.id, "disbursements");
             if (isAdmin) {
                 fetchDisbursements();
                 fetchForumMembers();
                 fetchForumWallet();
             }
         }
-    }, [forum?.id, isAdmin, clearTabNotifications]);
-
-    // Refresh disbursement lists when a disbursement notification arrives
-    useEffect(() => {
-        if (!forum?.id) return;
-        if (!notifications || notifications.length === 0) return;
-
-        const hasDisbursementNotif = notifications.some(n => {
-            const nidForum = String(n.forum_id || n.forum || "");
-            return nidForum === String(forum.id) && n.tab === 'disbursements';
-        });
-
-        if (hasDisbursementNotif) {
-            // For members, refresh their personal disbursements
-            fetchMyDisbursements();
-            // For admins, refresh the admin disbursement list as well
-            if (isAdmin) fetchDisbursements();
-        }
-    }, [notifications, forum?.id, isAdmin]);
+    }, [forum?.id, isAdmin]);
 
     const fetchMyDisbursements = async () => {
         setMemberDisbLoading(true);
@@ -717,7 +698,7 @@ export default function ForumDisbursement({ forum, userRole }) {
                             type="submit"
                             className="w-full bg-primary text-white py-2 rounded-lg font-medium hover:bg-opacity-90 transition"
                         >
-                            Create and Disburse
+                            Create Disbursement
                         </button>
                     </form>
                 )}
@@ -791,8 +772,8 @@ export default function ForumDisbursement({ forum, userRole }) {
                                     <div>
                                         <p className="text-xs text-gray-600">Status</p>
                                         <span className={`inline-block px-2 py-1 rounded text-sm font-semibold ${disbursementDetails.status === "SUCCESSFUL" ? "bg-green-100 text-green-800" :
-                                            disbursementDetails.status === "FAILED" ? "bg-red-100 text-red-800" :
-                                                "bg-yellow-100 text-yellow-800"
+                                                disbursementDetails.status === "FAILED" ? "bg-red-100 text-red-800" :
+                                                    "bg-yellow-100 text-yellow-800"
                                             }`}>
                                             {disbursementDetails.status}
                                         </span>

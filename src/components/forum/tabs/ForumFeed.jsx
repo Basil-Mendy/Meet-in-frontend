@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext } from "react";
+import { AuthContext } from "../../../context/AuthContext";
 import api from "../../../api/axios";
 import { useNotifications } from "../../../context/NotificationContext";
 import NotificationMessageBar from "../../notifications/NotificationMessageBar";
 import ReactionsModal from "../ReactionsModal";
 
 export default function ForumFeed({ forum, userRole }) {
-    const { clearTabNotifications, notifications } = useNotifications();
+    const { notifications } = useNotifications();
     const [posts, setPosts] = useState([]);
     const [newPost, setNewPost] = useState("");
     const [postImage, setPostImage] = useState(null);
@@ -72,8 +73,13 @@ export default function ForumFeed({ forum, userRole }) {
         }
     }, [error]);
 
-    // Fetch posts on mount
+    const { isAuthenticated, loading: authLoading } = useContext(AuthContext);
+
+    // Fetch posts on mount (only when authenticated)
     useEffect(() => {
+        if (authLoading) return;
+        if (!isAuthenticated) return;
+
         // Load current user id for permission checks first
         const loadUserIdAndPosts = async () => {
             try {
@@ -90,12 +96,7 @@ export default function ForumFeed({ forum, userRole }) {
         };
 
         loadUserIdAndPosts();
-
-        // Clear feed notifications when entering this tab
-        if (forum?.id) {
-            clearTabNotifications(forum.id, "feed");
-        }
-    }, [forum?.id, clearTabNotifications]);
+    }, [forum?.id, isAuthenticated, authLoading]);
 
     // Monitor notifications for new posts and automatically refresh the feed
     useEffect(() => {
@@ -104,7 +105,7 @@ export default function ForumFeed({ forum, userRole }) {
         // Find new FEED_NEW_POST notifications for this forum
         const newFeedNotifications = notifications.filter(
             notif =>
-                notif.forum_id === forum.id &&
+                String(notif.forum_id) === String(forum.id) &&
                 notif.notification_type === 'FEED_NEW_POST' &&
                 notif.id !== lastProcessedNotificationId.current
         );

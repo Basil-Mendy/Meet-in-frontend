@@ -8,7 +8,20 @@ import api from '../api/axios';
 class NotificationService {
     constructor() {
         this.ws = null;
-        this.wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:8000/ws/notifications/';
+        // Prefer explicit env override, otherwise derive from API base URL or current origin
+        let derivedWs = import.meta.env.VITE_WS_URL;
+        if (!derivedWs) {
+            try {
+                const apiBase = api.defaults?.baseURL || (typeof window !== 'undefined' ? `${window.location.protocol}//${window.location.hostname}${window.location.port ? ':' + window.location.port : ''}` : 'http://localhost:8001');
+                // remove trailing /api if present
+                const cleaned = apiBase.replace(/\/api\/?$/, '');
+                // convert http(s) -> ws(s)
+                derivedWs = cleaned.replace(/^http/, 'ws') + '/ws/notifications/';
+            } catch (e) {
+                derivedWs = 'ws://localhost:8001/ws/notifications/';
+            }
+        }
+        this.wsUrl = derivedWs;
         this.reconnectAttempts = 0;
         this.maxReconnectAttempts = 5;
         this.reconnectDelay = 3000;
@@ -31,11 +44,34 @@ class NotificationService {
 
         return new Promise((resolve, reject) => {
             try {
+                // Log WS URL being used (obfuscate token)
+                try {
+                    const configured = import.meta.env.VITE_WS_URL || '(not set)';
+                    console.log(`NotificationService: connecting to WS at ${configured}`);
+                    if (!configured.startsWith('ws')) {
+                        console.warn('VITE_WS_URL does not appear to be a ws:// or wss:// URL; check VITE_WS_URL in .env');
+                    }
+                } catch (e) {
+                    console.warn('Could not read VITE_WS_URL', e);
+                }
+
+                // Set a timeout - if WebSocket doesn't connect in 10 seconds, resolve anyway
+                // This allows app to continue with HTTP polling fallback
+                const connectionTimeout = setTimeout(() => {
+                    if (this.isConnecting) {
+                        console.warn('WebSocket connection timeout, continuing without real-time notifications');
+                        this.isConnecting = false;
+                        resolve(); // Allow app to continue
+                    }
+                }, 10000);
+
                 // Construct WebSocket URL with token
                 const wsUrl = `${this.wsUrl}?token=${token}`;
+                console.log('Opening WebSocket to', wsUrl.replace(/(token=)[^&]+/, '$1[REDACTED]'));
                 this.ws = new WebSocket(wsUrl);
 
                 this.ws.onopen = () => {
+                    clearTimeout(connectionTimeout);
                     console.log('WebSocket connected to notifications');
                     this.isConnecting = false;
                     this.reconnectAttempts = 0;
@@ -50,13 +86,15 @@ class NotificationService {
                 };
 
                 this.ws.onerror = (error) => {
+                    clearTimeout(connectionTimeout);
                     console.error('WebSocket error:', error);
                     this.isConnecting = false;
                     this.notifyListeners('error', error);
-                    reject(error);
+                    // Don't reject - let the timeout or onclose handle recovery
                 };
 
                 this.ws.onclose = () => {
+                    clearTimeout(connectionTimeout);
                     console.log('WebSocket disconnected');
                     this.isConnecting = false;
                     this.notifyListeners('connected', false);

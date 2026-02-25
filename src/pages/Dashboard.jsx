@@ -1,8 +1,6 @@
 import { useEffect, useState, useContext } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
-import { useNotifications } from "../context/NotificationContext";
-import { NotificationBadge } from "../components/notifications/NotificationBadges";
 import { AuthContext } from "../context/AuthContext";
 
 import Sidebar from "../components/Sidebar";
@@ -10,6 +8,7 @@ import Topbar from "../components/Topbar";
 import MobileProfilePanel from "../components/MobileProfilePanel";
 import UserProfile from "./UserProfile";
 import ForumDetail from "./ForumDetail";
+import ForumNotificationBadge from "../components/notifications/ForumNotificationBadge";
 
 export default function Dashboard() {
   const { isAuthenticated } = useContext(AuthContext);
@@ -20,7 +19,6 @@ export default function Dashboard() {
   const [showMobileProfile, setShowMobileProfile] = useState(false);
   const [selectedForumId, setSelectedForumId] = useState(null);
   const navigate = useNavigate();
-  const { unreadCounts } = useNotifications();
   const { forumId } = useParams();
 
   // 🔐 Check profile completion status
@@ -131,28 +129,22 @@ export default function Dashboard() {
                               onClick={() => navigate(`/forum/${f.id}`)}
                               className="w-full text-left p-3 bg-white border rounded-lg shadow-sm flex items-center gap-3 hover:bg-gray-50 transition"
                             >
-                              <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
-                                {f.profile_picture ? (
-                                  <img src={f.profile_picture} alt={f.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  <span className="text-lg font-bold">{f.name?.charAt(0)?.toUpperCase()}</span>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium truncate">{f.name}</p>
-                                <p className="text-xs text-gray-500">
-                                  {(() => {
-                                    const count = unreadCounts?.forums?.[String(f.id)] || 0;
-                                    return count > 0
-                                      ? `${count} new update${count > 1 ? "s" : ""}`
-                                      : "No new updates";
-                                  })()}
-                                </p>
+                              <div className="flex items-center gap-3 flex-1">
+                                <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden">
+                                  {f.profile_picture ? (
+                                    <img src={f.profile_picture} alt={f.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                    <span className="text-lg font-bold">{f.name?.charAt(0)?.toUpperCase()}</span>
+                                  )}
+                                </div>
+                                <div className="flex-1">
+                                  <p className="text-sm font-medium">{f.name}</p>
+                                  <p className="text-xs text-gray-500 truncate">{f.description || 'No description'}</p>
+                                </div>
                               </div>
 
-                              {/* Notification badge on mobile */}
-                              <div className="flex-shrink-0">
-                                <NotificationBadge count={unreadCounts?.forums?.[String(f.id)] || 0} />
+                              <div className="flex-shrink-0 ml-2">
+                                <ForumNotificationBadge forumId={f.id} />
                               </div>
                             </button>
                           ))}

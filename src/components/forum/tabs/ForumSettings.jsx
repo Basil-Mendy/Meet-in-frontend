@@ -25,13 +25,11 @@ export default function ForumSettings({ forum, userRole }) {
 
     // Check if user is admin
     const isAdmin = userRole && ["SA", "CP"].includes(userRole);
-    const { clearTabNotifications } = useNotifications();
 
     // Fetch invitation codes on mount
     useEffect(() => {
         if (forum?.id) {
             fetchJoinRequests();
-            clearTabNotifications(forum.id, "settings");
             if (isAdmin) {
                 fetchInvitationCodes();
             }
@@ -40,7 +38,7 @@ export default function ForumSettings({ forum, userRole }) {
                 setForumEmail(forum.email);
             }
         }
-    }, [forum?.id, isAdmin, clearTabNotifications]);
+    }, [forum?.id, isAdmin]);
 
     const fetchInvitationCodes = async () => {
         setLoading(true);

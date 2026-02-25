@@ -4,7 +4,6 @@ import { useNotifications } from "../../../context/NotificationContext";
 import NotificationMessageBar from "../../notifications/NotificationMessageBar";
 
 export default function ForumPayments({ forum, userRole }) {
-    const { clearTabNotifications } = useNotifications();
     // Payments state
     const [memberPayments, setMemberPayments] = useState([]);
     const [loading, setLoading] = useState(false);
@@ -52,10 +51,8 @@ export default function ForumPayments({ forum, userRole }) {
             if (isAdmin) {
                 fetchAllMemberPayments();
             }
-            // Clear payments notifications when entering this tab
-            clearTabNotifications(forum.id, "payments");
         }
-    }, [forum?.id, isAdmin, clearTabNotifications]);
+    }, [forum?.id, isAdmin]);
 
     const fetchMemberPayments = async () => {
         setLoading(true);
@@ -187,10 +184,28 @@ export default function ForumPayments({ forum, userRole }) {
             setSuccessMessage("");
             const payload = amount !== undefined ? { amount: parseFloat(amount) } : {};
             const response = await api.post(`payments/member-payments/${memberPaymentId}/pay/`, payload);
-            setSuccessMessage(response.data.message);
-            fetchMemberPayments();
+
+            // Check if response is successful (status 2xx)
+            if (response.status >= 200 && response.status < 300) {
+                setSuccessMessage(response.data?.message || "Payment completed successfully!");
+                // Fetch updated list after a short delay to ensure DB is updated
+                setTimeout(() => {
+                    fetchMemberPayments();
+                    fetchAllMemberPayments();
+                }, 500);
+            } else {
+                setError(response.data?.error || "Payment processing failed");
+            }
         } catch (err) {
-            setError(err.response?.data?.error || "Payment failed");
+            // Check if this is a known error with details
+            const errorMessage = err.response?.data?.detail || err.response?.data?.error || "Payment processing failed. Please try again.";
+            setError(errorMessage);
+            console.error("Payment error:", err);
+
+            // Still refresh in case payment succeeded despite error response
+            setTimeout(() => {
+                fetchMemberPayments();
+            }, 1500);
         }
     };
 

@@ -2,15 +2,25 @@ import { useContext, useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { AuthContext } from "../context/AuthContext";
 import api from "../api/axios";
+import { useNotifications } from "../context/NotificationContext";
+import { Wallet, Bell, User, LogOut } from "lucide-react";
 
 export default function Topbar({ onProfileClick }) {
   const { logout } = useContext(AuthContext);
+  const { isAuthenticated, loading: authLoading } = useContext(AuthContext);
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [profile, setProfile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const { unreadCounts } = useNotifications();
+
+  // Calculate total unread across all forums
+  const globalUnreadCount = Object.values(unreadCounts.forums || {}).reduce((sum, count) => sum + count, 0);
 
   useEffect(() => {
+    if (authLoading) return;
+    if (!isAuthenticated) return;
+
     const fetchProfile = async () => {
       try {
         const res = await api.get("auth/profile/");
@@ -21,7 +31,7 @@ export default function Topbar({ onProfileClick }) {
     };
 
     fetchProfile();
-  }, []);
+  }, [isAuthenticated, authLoading]);
 
   const handleProfileClick = () => {
     const isMobile = window.innerWidth < 768;
@@ -64,32 +74,52 @@ export default function Topbar({ onProfileClick }) {
         <p className="text-xs text-white/70">Your communities</p>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3 md:gap-4">
         <button
           onClick={logout}
-          className="text-sm text-white/80 hover:text-white transition font-medium"
+          className="flex items-center gap-2 text-sm md:text-sm text-white/80 hover:text-white transition font-medium"
+          aria-label="Logout"
+          title="Logout"
         >
-          Logout
+          <LogOut className="w-5 h-5 md:hidden" />
+          <span className="hidden md:inline">Logout</span>
         </button>
+
+        {/* Global Notification Bell */}
+        <div className="relative">
+          <button
+            onClick={() => navigate('/notifications')}
+            title="Notifications"
+            className="w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition relative"
+          >
+            <Bell className="w-5 h-5 md:w-6 md:h-6 text-white-500" />
+            {globalUnreadCount > 0 && (
+              <span className="absolute top-0 right-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[20px] text-center">
+                {globalUnreadCount > 99 ? '99+' : globalUnreadCount}
+              </span>
+            )}
+          </button>
+        </div>
+
         <button
           onClick={() => navigate('/user-wallet')}
           title="My Wallet"
-          className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition"
+          className="w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition"
         >
-          💼
+          <Wallet className="w-5 h-5 md:w-6 md:h-6 text-white-500" />
         </button>
 
         {/* Profile Icon Button */}
         <button
           onClick={handleProfileClick}
           title="My Profile"
-          className="w-9 h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition"
+          className="w-8 h-8 md:w-9 md:h-9 rounded-full flex items-center justify-center hover:bg-white/10 transition"
         >
-          👤
+          <User className="w-5 h-5 md:w-6 md:h-6 text-white-500" />
         </button>
 
         {/* Profile Picture with Camera Icon */}
-        <div className="relative w-9 h-9 rounded-full border-2 border-white/20 flex-shrink-0 overflow-hidden flex items-center justify-center bg-white text-primary text-sm font-bold hover:border-white transition group">
+        <div className="relative w-8 h-8 md:w-9 md:h-9 rounded-full border-2 border-white/20 flex-shrink-0 overflow-hidden flex items-center justify-center bg-white text-primary text-sm font-bold hover:border-white transition group">
           {profile?.photo ? (
             <img src={profile.photo} alt="Profile" className="w-full h-full object-cover" />
           ) : (

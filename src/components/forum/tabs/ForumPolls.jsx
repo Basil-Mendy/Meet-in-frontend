@@ -364,14 +364,10 @@ export default function ForumPolls({ forum, userRole }) {
     const [expandedGroups, setExpandedGroups] = useState({});
 
     const isAdmin = userRole && ["SA", "CP"].includes(userRole);
-    const { clearTabNotifications } = useNotifications();
 
     useEffect(() => {
         fetchPolls();
-        if (forum?.id) {
-            clearTabNotifications(forum.id, "polls");
-        }
-    }, [forum?.id, showArchived, clearTabNotifications]);
+    }, [forum?.id, showArchived]);
 
     const fetchPolls = async () => {
         try {

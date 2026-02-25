@@ -1,5 +1,6 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useContext } from "react";
 import api from "../api/axios";
+import { AuthContext } from "../context/AuthContext";
 
 export default function MobileProfilePanel({ isOpen, onClose }) {
     const fileInputRef = useRef(null);
@@ -11,8 +12,12 @@ export default function MobileProfilePanel({ isOpen, onClose }) {
     const [selfieFile, setSelfieFile] = useState(null);
     const [idFile, setIdFile] = useState(null);
 
+    const { isAuthenticated, loading: authLoading } = useContext(AuthContext);
+
     useEffect(() => {
         if (!isOpen) return;
+        if (authLoading) return;
+        if (!isAuthenticated) return;
 
         const fetchProfile = async () => {
             try {
@@ -27,7 +32,7 @@ export default function MobileProfilePanel({ isOpen, onClose }) {
         };
 
         fetchProfile();
-    }, [isOpen]);
+    }, [isOpen, isAuthenticated, authLoading]);
 
     const handleProfilePictureUpload = async (e) => {
         const file = e.target.files?.[0];

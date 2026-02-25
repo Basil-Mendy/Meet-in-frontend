@@ -2,21 +2,19 @@ import { useEffect, useState } from "react";
 import api from "../../../api/axios";
 import { useNotifications } from "../../../context/NotificationContext";
 import NotificationMessageBar from "../../notifications/NotificationMessageBar";
+import GeneralRecords from "./GeneralRecords";
 
 export default function ForumAbout({ forum, userRole }) {
     const [aboutData, setAboutData] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [showGeneralRecords, setShowGeneralRecords] = useState(false);
 
-    const isAdmin = userRole && ["SA", "CP", "VC", "SEC", "FSEC"].includes(userRole);
-    const { clearTabNotifications } = useNotifications();
+    const isAdmin = userRole && ["MOD", "C", "VC", "SEC", "ASEC", "FSEC", "TR", "PRO", "POI", "POII", "SA", "CP"].includes(userRole);
 
     useEffect(() => {
         fetchAboutData();
-        if (forum?.id) {
-            clearTabNotifications(forum.id, "about");
-        }
-    }, [forum?.id, clearTabNotifications]);
+    }, [forum?.id]);
 
     const fetchAboutData = async () => {
         try {
@@ -42,6 +40,21 @@ export default function ForumAbout({ forum, userRole }) {
         );
     }
 
+    // If showing general records, render that component
+    if (showGeneralRecords) {
+        return (
+            <div className="max-w-7xl mx-auto p-4 sm:p-6">
+                <button
+                    onClick={() => setShowGeneralRecords(false)}
+                    className="mb-4 w-full sm:w-auto px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm sm:text-base font-medium"
+                >
+                    ← Back to Forum About
+                </button>
+                <GeneralRecords forum={forum} userRole={userRole} />
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-7xl mx-auto p-6 space-y-8">
             <NotificationMessageBar forumId={forum?.id} tab="about" />
@@ -54,6 +67,21 @@ export default function ForumAbout({ forum, userRole }) {
 
             {aboutData && (
                 <>
+                    {/* ADMIN CONTROLS */}
+                    {isAdmin && (
+                        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 sm:p-4">
+                            <button
+                                onClick={() => setShowGeneralRecords(true)}
+                                className="w-full sm:w-auto px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold text-sm sm:text-base"
+                            >
+                                📋 View General Records
+                            </button>
+                            <p className="text-xs sm:text-sm text-gray-600 mt-2">
+                                Access forum activity history and export records.
+                            </p>
+                        </div>
+                    )}
+
                     {/* SECTION 1: FORUM INFORMATION */}
                     <ForumInfoSection
                         forum={aboutData}
@@ -567,12 +595,19 @@ function ForumWalletSection({ forum, isAdmin, onDataChange }) {
                 setTransactions(walletRes.data.transactions);
             }
 
-            // Fetch bank account
+            // Fetch bank account (admin only)
             try {
                 const bankRes = await api.get(`/forums/${forum.id}/about/bank-account/`);
                 setBankAccount(bankRes.data);
-            } catch {
-                // Bank account not configured
+            } catch (err) {
+                // Bank account fetch failed - could be 403 (not admin) or 404 (not configured)
+                if (err.response?.status === 403) {
+                    // Not admin - this is expected, silently skip
+                    console.debug("Bank account access denied - user is not admin");
+                } else {
+                    // Other errors (404, network, etc.) - also skip silently
+                    console.debug("Bank account not available:", err.message);
+                }
             }
         } catch (err) {
             console.error("Failed to load wallet data:", err);

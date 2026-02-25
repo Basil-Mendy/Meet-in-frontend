@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import api from "../api/axios";
+import { useNotifications } from "../context/NotificationContext";
 import ForumHeader from "../components/forum/ForumHeader";
 import ForumTabNav from "../components/forum/ForumTabNav";
 import ForumFeed from "../components/forum/tabs/ForumFeed";
@@ -16,6 +17,7 @@ import ForumDisbursement from "../components/forum/tabs/ForumDisbursement";
 export default function ForumDetail({ forumId: propForumId, onBack }) {
     const navigate = useNavigate();
     const { forumId: urlForumId } = useParams();
+    const { clearTabNotifications } = useNotifications();
     const [forum, setForum] = useState(null);
     const [activeTab, setActiveTab] = useState("feed");
     const [loading, setLoading] = useState(true);
@@ -33,12 +35,13 @@ export default function ForumDetail({ forumId: propForumId, onBack }) {
                 setForum(res.data);
 
                 // Fetch user's role in this forum (if available)
-                // This assumes an endpoint like forums/{id}/my-role/
                 try {
                     const roleRes = await api.get(`forums/${forumId}/my-role/`);
-                    setUserRole(roleRes.data.role);
+                    console.log("User role fetched:", roleRes.data);
+                    setUserRole(roleRes.data.role || null);
                 } catch (e) {
-                    setUserRole("member");
+                    console.log("Error fetching user role:", e.response?.status, e.message);
+                    setUserRole(null);
                 }
             } catch (err) {
                 setError("Failed to load forum");
@@ -50,6 +53,26 @@ export default function ForumDetail({ forumId: propForumId, onBack }) {
 
         fetchForum();
     }, [forumId]);
+
+    // Clear tab notifications when active tab changes
+    // Note: Only clear if tab actually changed (not on mount)
+    const previousTabRef = useRef(null);
+    const isInitialMountRef = useRef(true);
+
+    useEffect(() => {
+        // Skip clearing on initial mount
+        if (isInitialMountRef.current) {
+            isInitialMountRef.current = false;
+            previousTabRef.current = activeTab;
+            return;
+        }
+
+        // Only clear if tab actually changed
+        if (forumId && previousTabRef.current !== activeTab) {
+            previousTabRef.current = activeTab;
+            clearTabNotifications(forumId, activeTab);
+        }
+    }, [activeTab, forumId, clearTabNotifications]);
 
     if (loading) {
         return (
